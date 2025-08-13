@@ -31,16 +31,20 @@ struct FOverTimeEffect
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EOverTimeEffectType Type;
 
-	float AppliedChange;
-	float TotalChange;
+	float ChangeAccum;
+	float ElapsedTime;
+	int TotalChange;
+	int AppliedChange;
 
 	FOverTimeEffect()
 		: ChangeRatePerSecond(0.0f),
 		  Duration(0.0f),
 		  bAllowOverflow(false),
 		  Type(EOverTimeEffectType::None),
-		  AppliedChange(0.0f),
-		  TotalChange(0.0f)
+		  ChangeAccum(0.0f),
+		  ElapsedTime(0.0f),
+		  TotalChange(0.0f),
+		  AppliedChange(0.0f)
 	{
 	}
 
@@ -50,8 +54,10 @@ struct FOverTimeEffect
 		  Duration(Duration),
 		  bAllowOverflow(bAllowOverflow),
 		  Type(Type),
-		  AppliedChange(0.0f),
-		  TotalChange(ChangeRatePerSecond * Duration)
+		  ChangeAccum(0.0f),
+		  ElapsedTime(0.0f),
+		  TotalChange(0.0f),
+		  AppliedChange(0.0f)
 	{
 	}
 };
@@ -120,10 +126,6 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TArray<FOverTimeEffect> OverTimeEffects;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	float AutoDecreaseStep;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	float AutoIncreaseStep;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	float AutoDecreaseAccum = 0.0f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)

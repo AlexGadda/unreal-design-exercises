@@ -1,5 +1,7 @@
 #include "Components/AC_EntityResource.h"
 
+#include "MathUtil.h"
+
 // Sets default values for this component's properties
 UAC_EntityResource::UAC_EntityResource()
 {
@@ -15,8 +17,6 @@ void UAC_EntityResource::BeginPlay()
 	Super::BeginPlay();
 
 	CurrValue = InitialValue;
-	AutoDecreaseStep = 1/AutoDecreaseRate;
-	AutoIncreaseStep = 1/AutoIncreaseRate;
 }
 
 
@@ -28,50 +28,69 @@ void UAC_EntityResource::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	// Auto 
 	if (bAutoDecreaseEnabled && CurrValue > MinThreshold)
 	{
-		AutoDecreaseAccum += DeltaTime;
-		if(AutoDecreaseAccum >= AutoDecreaseRate)
+		AutoDecreaseAccum += AutoDecreaseRate * DeltaTime;
+		if(AutoDecreaseAccum >= 1.0f)
 		{
-			AutoDecreaseAccum -= AutoDecreaseRate;
+			AutoDecreaseAccum -= 1.0f;
 			DecreaseValue(1);
-
-			/*
-			if (CurrValue < MinThreshold)
-			{
-				CurrValue = MinThreshold;
-			}
-			*/
 		}
 	}
 
 	if (bAutoIncreaseEnabled && CurrValue < MaxThreshold)
 	{
-		IncreaseValue(AutoIncreaseRate * DeltaTime);
-		if (CurrValue > MaxThreshold)
-			CurrValue = MaxThreshold;
+		AutoIncreaseAccum += AutoIncreaseRate * DeltaTime;
+		if(AutoIncreaseAccum >= 1.0f)
+		{
+			AutoIncreaseAccum -= 1.0f;
+			IncreaseValue(1);
+		}
 	}
 
 	// OverTimeEffects
-	for (int i = 0; i < OverTimeEffects.Num(); i++)
+	for (int i = OverTimeEffects.Num()-1; i >= 0; --i)
 	{
-		float ValueChange = OverTimeEffects[i].ChangeRatePerSecond * DeltaTime;
-		OverTimeEffects[i].AppliedChange += ValueChange;
-		if (OverTimeEffects[i].AppliedChange >= OverTimeEffects[i].TotalChange)
+		OverTimeEffects[i].ElapsedTime += DeltaTime;
+		if(OverTimeEffects[i].ElapsedTime > OverTimeEffects[i].Duration)
 		{
-			//SetCurrValue();
+			if(OverTimeEffects[i].AppliedChange != OverTimeEffects[i].TotalChange)
+			{
+				int Difference = OverTimeEffects[i].TotalChange - OverTimeEffects[i].AppliedChange;
+				if(Difference > 0)
+					IncreaseValue(Difference);
+				else
+					DecreaseValue(Difference);
+			}
+			OverTimeEffects.RemoveAt(i);
+			continue;
 		}
+		
+		float ValueChange = OverTimeEffects[i].ChangeRatePerSecond * DeltaTime;
+		OverTimeEffects[i].TotalChange += ValueChange;
+		OverTimeEffects[i].ChangeAccum += FMath::Abs(ValueChange);
+		while(OverTimeEffects[i].ChangeAccum >= 1.0f) // For accounting lag spikes
+		{
+			OverTimeEffects[i].ChangeAccum -= 1.0f;
 
-		if (OverTimeEffects[i].ChangeRatePerSecond > 0)
-			IncreaseValue(OverTimeEffects[i].ChangeRatePerSecond * DeltaTime, OverTimeEffects[i].bAllowOverflow);
-		else
-			DecreaseValue(-OverTimeEffects[i].ChangeRatePerSecond * DeltaTime);
+			if (OverTimeEffects[i].ChangeRatePerSecond > 0)
+			{
+				IncreaseValue(1.0f);
+				OverTimeEffects[i].AppliedChange += 1.0f;
+			}
+			else
+			{
+				DecreaseValue(1.0f);
+				OverTimeEffects[i].AppliedChange -= 1.0f;
+			}
+		}
 	}
 }
 
 int UAC_EntityResource::IncreaseValue(const float Amount, const bool bAllowOverflow)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Hello World"));
 	if (bAllowOverflow)
 		CurrValue += Amount;
-	else if (CurrValue < MaxThreshold)
+	else if (CurrValue < MaxValue)
 		CurrValue = FMath::Min(CurrValue + FMath::Abs(Amount), MaxValue);
 
 	OnValueIncreasedDelegate.Broadcast(CurrValue);
@@ -120,6 +139,6 @@ int UAC_EntityResource::SetCurrValue(const float NewValue)
 
 void UAC_EntityResource::AddOverTimeEffect(FOverTimeEffect OverTimeEffect)
 {
-	OverTimeEffect.TotalChange = OverTimeEffect.ChangeRatePerSecond * OverTimeEffect.Duration;
+	OverTimeEffect.TotalChange = FMath::RoundToInt(OverTimeEffect.ChangeRatePerSecond * OverTimeEffect.Duration);
 	OverTimeEffects.Add(OverTimeEffect);
 }
